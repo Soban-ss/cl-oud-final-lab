@@ -96,14 +96,15 @@ jobs:
           aws s3 cp deploy.zip \
             s3://elasticbeanstalk-ap-southeast-2-959756151844/github-actions/${GITHUB_SHA}-${GITHUB_RUN_NUMBER}.zip
 
-      # Step 6: Create Elastic Beanstalk version
+
       - name: Create Elastic Beanstalk application version
         run: |
           aws elasticbeanstalk create-application-version \
             --application-name Online-Bookstore \
-            --version-label "${GITHUB_SHA}-${GITHUB_RUN_NUMBER}" \
+            --version-label "${GITHUB_SHA}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}" \
             --source-bundle \
             S3Bucket=elasticbeanstalk-ap-southeast-2-959756151844,S3Key=github-actions/${GITHUB_SHA}-${GITHUB_RUN_NUMBER}.zip
+
 
       # Step 7: Deploy application to AWS
       - name: Deploy to Elastic Beanstalk
