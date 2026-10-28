@@ -20,68 +20,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Download project from GitHub
+      # Step 1: Checkout repository
       - name: Checkout GitHub repository
         uses: actions/checkout@v4
 
-      # Step 2: Check GitHub OIDC identity
-      - name: Check GitHub OIDC identity
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import os
-          import json
-          import base64
-          import urllib.request
-          import urllib.parse
-
-          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
-          token = os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
-
-          separator = "&" if "?" in url else "?"
-          request_url = (
-              url + separator +
-              urllib.parse.urlencode(
-                  {"audience": "sts.amazonaws.com"}
-              )
-          )
-
-          request = urllib.request.Request(
-              request_url,
-              headers={
-                  "Authorization": "Bearer " + token
-              }
-          )
-
-          with urllib.request.urlopen(request) as response:
-              jwt = json.load(response)["value"]
-
-          payload = jwt.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-
-          claims = json.loads(
-              base64.urlsafe_b64decode(payload)
-          )
-
-          print("GitHub OIDC identity:")
-          for key in (
-              "iss",
-              "aud",
-              "sub",
-              "repository",
-              "ref"
-          ):
-              print(f"{key}: {claims.get(key)}")
-          PY
-
-      # Step 3: Authenticate with AWS using OIDC
+      # Step 2: Configure AWS authentication
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::959756151844:role/GitHubActions-Bookstore-Deploy
           aws-region: ap-southeast-2
 
-      # Step 4: Package Flask application
+      # Step 3: Package Flask application
       - name: Package Flask application
         run: |
           zip -r deploy.zip \
@@ -90,25 +40,24 @@ jobs:
             Procfile \
             templates
 
-      # Step 5: Upload ZIP file to AWS S3
+      # Step 4: Upload application to S3
       - name: Upload application to S3
         run: |
           aws s3 cp deploy.zip \
-            s3://elasticbeanstalk-ap-southeast-2-959756151844/github-actions/${GITHUB_SHA}-${GITHUB_RUN_NUMBER}.zip
+            "s3://elasticbeanstalk-ap-southeast-2-959756151844/github-actions/${GITHUB_SHA}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}.zip"
 
-
+      # Step 5: Create a unique application version
       - name: Create Elastic Beanstalk application version
         run: |
           aws elasticbeanstalk create-application-version \
             --application-name Online-Bookstore \
             --version-label "${GITHUB_SHA}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}" \
             --source-bundle \
-            S3Bucket=elasticbeanstalk-ap-southeast-2-959756151844,S3Key=github-actions/${GITHUB_SHA}-${GITHUB_RUN_NUMBER}.zip
+            "S3Bucket=elasticbeanstalk-ap-southeast-2-959756151844,S3Key=github-actions/${GITHUB_SHA}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}.zip"
 
-
-      # Step 7: Deploy application to AWS
+      # Step 6: Deploy application
       - name: Deploy to Elastic Beanstalk
         run: |
           aws elasticbeanstalk update-environment \
             --environment-name Online-Bookstore-env \
-            --version-label "${GITHUB_SHA}-${GITHUB_RUN_NUMBER}"
+            --version-label "${GITHUB_SHA}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
